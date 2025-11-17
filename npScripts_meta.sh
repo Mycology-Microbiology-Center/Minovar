@@ -244,6 +244,17 @@ echo "    Dorado models:   $DORADO_MODELS_DIR"
 echo ""
 
 
+## --- Dir setup
+
+mkdir -p vsearch
+mkdir -p specimen_reads
+mkdir -p cons_withPrimers
+mkdir -p mixed
+mkdir -p nonTargetAmp
+mkdir -p clusters
+mkdir -p clusters_small
+mkdir -p bcCons
+mkdir -p cons
 
 
 ## --- Main pipeline
