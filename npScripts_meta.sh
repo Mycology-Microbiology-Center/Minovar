@@ -3,6 +3,11 @@
 # Multithreading (e.g., for cutadapt, devider, minimap2, etc.)
 THREADS=4
 
+# Cutadapt parameters
+CUTADAPT_ERROR_RATE=0.15
+CUTADAPT_OVERLAP=15
+CUTADAPT_MIN_LENGTH=400
+
 
 echo "Validating dependencies..."
 
@@ -41,12 +46,12 @@ do echo "Filtering reads of $b according to minimum and maximum length specified
   echo "Classifying reads according to primers"
   cutadapt \
   -g file:../primers.fas \
-  -e 0.15 \
+  -e $CUTADAPT_ERROR_RATE \
   --revcomp \
   --action trim \
   --untrimmed-output ../nonTargetAmp/$b.fq \
-  --overlap 15 \
-  --minimum-length 400 \
+  --overlap $CUTADAPT_OVERLAP \
+  --minimum-length $CUTADAPT_MIN_LENGTH \
   --cores $THREADS \
   -o {name}.fq \
   ../np_out.fq
@@ -237,11 +242,11 @@ echo "Polishing and variant calling"
      cat $j*.fas > withPrimers.fasta
      cutadapt \
        -g file:../primers.fas \
-       -e 0.15 \
+       -e $CUTADAPT_ERROR_RATE \
        --action trim \
        --untrimmed-output primersNotCut.fasta \
-       --overlap 15 \
-       --minimum-length 400 \
+       --overlap $CUTADAPT_OVERLAP \
+       --minimum-length $CUTADAPT_MIN_LENGTH \
        --cores $THREADS \
        -o noPrimers.fasta \
        withPrimers.fasta
