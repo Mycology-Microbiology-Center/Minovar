@@ -1,3 +1,29 @@
+#!/bin/bash
+
+
+echo "Validating dependencies..."
+
+check_availability() {
+  local tool="$1"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "  \033[31mERROR: $tool is not installed\033[0m" >&2
+      exit 1
+  fi
+}
+
+check_availability "seqkit"
+check_availability "cutadapt"
+check_availability "vsearch"
+check_availability "samtools"
+check_availability "minimap2"
+check_availability "freebayes"
+check_availability "dorado"
+check_availability "abpoa"
+check_availability "devider"
+echo "  \033[32mAll dependencies are installed\033[0m" >&2
+
+
+
 seqkit seq -n primers.fas > gIDs.txt
 ls reads/*.fastq.gz | sed 's/.fastq.gz//' | sed 's/reads\///' > bcSpecimens_all.txt
 #doradoModel=dna_r10.4.1_e8.2_400bps_sup@v5.2.0_polish_rl_mv
