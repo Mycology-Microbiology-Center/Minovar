@@ -78,6 +78,90 @@ EOF
 }
 
 
+## --- Parsing command-line arguments
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        # Cutadapt parameters
+        --cutadapt-error-rate)
+            CUTADAPT_ERROR_RATE="$2"
+            shift 2 # move to the next argument
+            ;;
+        --cutadapt-overlap)
+            CUTADAPT_OVERLAP="$2"
+            shift 2
+            ;;
+        --cutadapt-min-length)
+            CUTADAPT_MIN_LENGTH="$2"
+            shift 2
+            ;;
+        --cluster-id-first)
+            CLUSTER_ID_FIRST="$2"
+            shift 2
+            ;;
+        --cluster-id-second)
+            CLUSTER_ID_SECOND="$2"
+            shift 2
+            ;;
+        --min-cluster-size)
+            MIN_CLUSTER_SIZE="$2"
+            shift 2
+            ;;
+        --max-reads-consensus)
+            MAX_READS_CONSENSUS="$2"
+            shift 2
+            ;;
+        --reads-for-polishing)
+            READS_FOR_POLISHING="$2"
+            shift 2
+            ;;
+        --variant-quality-threshold)
+            VARIANT_QUALITY_THRESHOLD="$2"
+            shift 2
+            ;;
+        --min-coverage)
+            MIN_COVERAGE="$2"
+            shift 2
+            ;;
+        --read-length-filter)
+            READ_LENGTH_FILTER="$2"
+            shift 2
+            ;;
+        --reads-dir)
+            READS_DIR="$2"
+            shift 2
+            ;;
+        --primers-file)
+            PRIMERS_FILE="$2"
+            shift 2
+            ;;
+        --bc-genes-file)
+            BC_GENES_FILE="$2"
+            shift 2
+            ;;
+        --dorado-models-dir)
+            DORADO_MODELS_DIR="$2"
+            shift 2
+            ;;
+        --devider-preset)
+            DEVIDER_PRESET="$2"
+            shift 2
+            ;;
+        --threads)
+            THREADS="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Error: Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 
 
 ## --- Validation
