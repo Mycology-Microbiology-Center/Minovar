@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # Exit on error
+
 ## --- Default parameters (can be overridden by command-line arguments)
 
 # Multithreading (e.g., for cutadapt, devider, minimap2, etc.)
