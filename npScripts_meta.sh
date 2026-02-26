@@ -75,6 +75,13 @@ OPTIONS:
     --threads INT                     Number of CPU threads for tools (default: $THREADS)
     -h, --help                        Display this help message and exit
 
+EXAMPLES:
+  # Run with default parameters
+  $(basename "$0")
+
+  # Run with customized parameters
+  $(basename "$0") --cluster-id-first 0.85 --cluster-id-second 0.95 --min-coverage 10
+
 EOF
     exit 1
 }
