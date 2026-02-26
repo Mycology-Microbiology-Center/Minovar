@@ -1,6 +1,8 @@
 # fullITS-multiplatform-eval
 Benchmarking Nanopore, PacBio, and Illumina 2×500 for eukaryotic full-length ITS amplicon sequencing
 
+## Minovar
+
 The script produces polished consensus variant sequences from nanopore reads of amplicons.
 
 The script takes as input
@@ -33,3 +35,33 @@ The consensus sequences are polished with dorado polish, assuming the relevant p
 
 
 The final polished consensus sequences are found in the bcCons folder and the corresponding reads in the specimen_reads folder.
+
+### Installation
+
+```bash
+## Create conda environment with required dependencies
+mamba create -n NANO \
+  -c conda-forge -c bioconda \
+  seqkit cutadapt vsearch samtools minimap2 freebayes abpoa devider
+
+## Download dorado
+wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.2.0-linux-x64.tar.gz
+tar -xzf dorado-1.2.0-linux-x64.tar.gz
+dorado-1.2.0-linux-x64/bin/dorado --version
+rm dorado-1.2.0-linux-x64.tar.gz
+
+## Test that dorado is working
+export DORADO_DIR="$PWD/dorado-1.2.0-linux-x64"
+export PATH="$DORADO_DIR/bin:$PATH"
+dorado --help
+
+## Download dorado model
+# cd ~/Nanopore/    # select directory where you want to download the model
+
+doradoModel=dna_r10.4.1_e8.2_400bps_sup@v5.2.0_polish_rl_mv
+mkdir -p doradoModels
+dorado download --model $doradoModel --models-directory doradoModels
+```
+
+### Usage
+
