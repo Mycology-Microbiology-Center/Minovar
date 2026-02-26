@@ -477,6 +477,7 @@ echo "Polishing and variant calling"
      for j in $(ls *.fas | sed 's/.vcluster.*$//' | sort | uniq)
      do echo "Cutting primers"
      cat $j*.fas > withPrimers.fasta
+     find . -type f -name "primersNotCut.fasta" -delete
      cutadapt \
        -g file:../$PRIMERS_FILE \
        -e $CUTADAPT_ERROR_RATE \
@@ -489,7 +490,9 @@ echo "Polishing and variant calling"
        withPrimers.fasta
        find -name "*.fasta" -type 'f' -empty -delete
        cat noPrimers.fasta >> ../bcCons/$j.new.fas
-       cat primersNotCut.fasta >> ../bcCons/primersNotCut.fas
+       if [ -f primersNotCut.fasta ]; then
+         cat primersNotCut.fasta >> ../bcCons/primersNotCut.fas
+       fi
      done
   fi
   cd ../bcCons
