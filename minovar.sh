@@ -324,7 +324,7 @@ if (($(ls *.fq | grep -f ../gIDs.txt | wc -l) < 1))
         else mv filt.fas $k.fas
              vsearch --cluster_fast $k.fas --clusters $k.vcluster --id $CLUSTER_ID_SECOND --iddef 1 --threads $THREADS  # second round of clustering
              ls $k.vcluster* > IDs.txt
-             rm readCount.txt
+             find . -type f -name "readCount.txt" -delete
              for j in $(ls $k.vcluster*)
              do seqkit grep -rp vcluster $j | seqkit seq -n | wc -l >> readCount.txt # counting sequence names containing "vcluster" in clusters
              done
