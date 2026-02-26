@@ -42,7 +42,7 @@ The final polished consensus sequences are found in the bcCons folder and the co
 ## Create conda environment with required dependencies
 mamba create -n NANO \
   -c conda-forge -c bioconda \
-  seqkit cutadapt vsearch samtools minimap2 freebayes abpoa devider
+  seqkit seqtk cutadapt vsearch samtools minimap2 freebayes abpoa devider
 
 ## Download dorado
 wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.2.0-linux-x64.tar.gz
