@@ -523,7 +523,7 @@ echo "Polishing and variant calling"
               toMerge=$(echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | head -n1)
               cat ../cons/*.fq > ../specimen_reads/$toMerge.reads.fq
               find ../cons -type f -name "*.fq" -delete
-              rm -r ./mv.sh
+              rm -f ./mv.sh
            done < $i.IDs.txt
          done
   fi
