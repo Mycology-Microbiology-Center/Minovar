@@ -276,7 +276,7 @@ ls $READS_DIR/*.fastq.gz | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||" > bcSpeci
 #dorado download --model $doradoModel --models-directory $DORADO_MODELS_DIR
 for b in $(ls $READS_DIR/*.fastq.gz | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||")
 do echo "Filtering reads of $b according to minimum and maximum length specified in the file $BC_GENES_FILE and sorting by average read quality in descending order"
-  seqkit seq -m $(awk 'min>$2 || NR==1{min=$2} END{print min}' $BC_GENES_FILE) -M $(awk 'max<$3 || NR==1{max=$3} END{print max}' $BC_GENES_FILE) $READS_DIR/$b.fastq.gz | 
+  seqkit seq --quiet -m $(awk 'min>$2 || NR==1{min=$2} END{print min}' $BC_GENES_FILE) -M $(awk 'max<$3 || NR==1{max=$3} END{print max}' $BC_GENES_FILE) $READS_DIR/$b.fastq.gz | 
   seqkit replace -p "\s.+" > np_out.fq
   cd vsearch
   find . -type f -name "*" -delete
@@ -318,7 +318,7 @@ if (($(ls *.fq | grep -f ../gIDs.txt | wc -l) < 1))
         done
         rm vcluster*
         echo "Second round of clustering of $b $k clusters"
-        seqkit seq -m $(grep $k -w ../$BC_GENES_FILE | cut -f2) $k.fas > filt.fas # filtering out sequences too short for the gene
+        seqkit seq --quiet -m $(grep $k -w ../$BC_GENES_FILE | cut -f2) $k.fas > filt.fas # filtering out sequences too short for the gene
         if (($(grep -c ">" filt.fas) < 1))
         then echo "No sequences of $k of sufficient length"
         else mv filt.fas $k.fas
