@@ -42,6 +42,8 @@ The final polished consensus sequences are found in the bcCons folder and the co
 
 ### Installation
 
+To install dependencies, you can use [conda](https://docs.anaconda.com/miniconda/) or [mamba](https://mamba.readthedocs.io/en/latest/):
+
 ```bash
 ## Create conda environment with required dependencies
 mamba create -n Minovar \
@@ -77,9 +79,59 @@ dorado download --model $doradoModel --models-directory doradoModels
 
 ### Usage
 
-Run the pipleline with the default parameters. Input data (fastq.gz and bam files) is located in the `reads` subdirectory, and dorado models are in the `doradoModels` subdirectory of the current working directory.
+1. Pull Minovar code to your local machine
 
 ```bash
-./minovar.sh --reads-dir reads --dorado-models-dir doradoModels
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/minovar.sh
+chmod +x minovar.sh
+```
+
+2. Prepare files with primer and amplicon length information.
+For examples, see:
+```bash
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/bcGenes.txt
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/primers.fas
+```
+
+3. Execute the workflow
+
+To run the pipleline with the default parameters, use the following command:
+
+```bash
+conda activate Minovar
+./minovar.sh
+```
+
+> [!NOTE] 
+> In addition to `bcGenes.txt` and `primers.fas`, 
+> the pipeline expects input data (`fastq.gz` and `bam` files) in the `reads` subdirectory, 
+> and dorado models in the `doradoModels` subdirectory of the current working directory.
+
+
+To use customized parameters, run the script with the desired parameters. For example:
+
+```bash
+conda activate Minovar
+./minovar.sh \
+  --cutadapt-error-rate 0.15 \
+  --cutadapt-overlap 15 \
+  --cutadapt-min-length 400 \
+  --cluster-id-first 0.8 \
+  --cluster-id-second 0.93 \
+  --min-cluster-size 5 \
+  --max-reads-consensus 100 \
+  --reads-for-polishing 200 \
+  --variant-quality-threshold 10 \
+  --min-coverage 5 \
+  --read-length-filter 0.9 \
+  --reads-dir reads \
+  --dorado-models-dir doradoModels
+```
+
+To see all available parameters, run the script with the `--help` option:
+
+```bash
+conda activate Minovar
+./minovar.sh --help
 ```
 
