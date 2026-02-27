@@ -283,14 +283,14 @@ mkdir -p cons
 ## --- Main pipeline
 
 seqkit seq -n $PRIMERS_FILE > gIDs.txt
-ls $READS_DIR/*.fastq.gz | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||" > bcSpecimens_all.txt
+find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||" > bcSpecimens_all.txt
 
-for b in $(ls $READS_DIR/*.fastq.gz | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||")
+for b in $(find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||")
 do echo "Filtering reads of $b according to minimum and maximum length specified in the file $BC_GENES_FILE and sorting by average read quality in descending order"
   seqkit seq --quiet -m $(awk 'min>$2 || NR==1{min=$2} END{print min}' $BC_GENES_FILE) -M $(awk 'max<$3 || NR==1{max=$3} END{print max}' $BC_GENES_FILE) $READS_DIR/$b.fastq.gz | 
   seqkit replace -p "\s.+" > np_out.fq
+  find vsearch/ -type f -delete
   cd vsearch
-  find . -type f -name "*" -delete
   echo "Classifying reads according to primers"
   cutadapt \
   -g file:../$PRIMERS_FILE \
@@ -304,19 +304,19 @@ do echo "Filtering reads of $b according to minimum and maximum length specified
   -o {name}.fq \
   ../np_out.fq
   find -name "*.fq" -type 'f' -empty -delete
-if (($(ls *.fq | grep -f ../gIDs.txt | wc -l) < 1))
+if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
   then
     echo "No target reads for $b"
   else
-    for k in $(ls *.fq | grep -o -f ../gIDs.txt)
+    for k in $(find -name "*.fq" | grep -o -f ../gIDs.txt)
     do seqkit replace -p "\s.+" $k.fq | seqkit fx2tab -q | sort -nrk4 | cut -f1,2,3 | seqkit tab2fx > np_out.fq
        mv np_out.fq $k.fq
        vsearch --cluster_smallmem $k.fq --usersort --clusters vcluster --id $CLUSTER_ID_FIRST --iddef 1 --threads $THREADS  # clustering reads # clustering reads without sorting reads in the input file
-      if (($(ls vcluster* 2> /dev/null | wc -l) < 1))
+      if (($(find -name "vcluster*" 2> /dev/null | wc -l) < 1))
         then
         echo "no clusters for $b"
       else
-        for j in $(ls vcluster*)
+        for j in $(find -name "vcluster*" | sed 's/.\///')
         do
           if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least MIN_CLUSTER_SIZE reads for consensus sequence creation
           then cat $j >> $k.fas
@@ -334,17 +334,17 @@ if (($(ls *.fq | grep -f ../gIDs.txt | wc -l) < 1))
         then echo "No sequences of $k of sufficient length"
         else mv filt.fas $k.fas
              vsearch --cluster_fast $k.fas --clusters $k.vcluster --id $CLUSTER_ID_SECOND --iddef 1 --threads $THREADS  # second round of clustering
-             ls $k.vcluster* > IDs.txt
+             find -name "$k.vcluster*" | sed 's/.\///' > IDs.txt
              find . -type f -name "readCount.txt" -delete
-             for j in $(ls $k.vcluster*)
+             for j in $(find -name "$k.vcluster*" | sed 's/.\///')
              do seqkit grep -rp vcluster $j | seqkit seq -n | wc -l >> readCount.txt # counting sequence names containing "vcluster" in clusters
              done
              paste IDs.txt readCount.txt | awk '$2 == 0' | awk '{print $1}' > temp.txt
              xargs -I{} rm -r "{}" < temp.txt # removing clusters not containing any sequence names containing "vcluster"
-             if (($(ls $k.* | wc -l) < 3))
+             if (($(find -name "$k.*" | wc -l) < 3))
              then echo "No clusters for $k"
              else
-               for j in $(ls $k.vcluster*)
+               for j in $(find -name "$k.vcluster*" | sed 's/.\///')
                do
                  if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least MIN_CLUSTER_SIZE reads for consensus sequence creation
                  then seqkit grep -rvp vcluster $j | seqkit seq -n > IDs.txt
@@ -381,9 +381,9 @@ cd ..
 done
 #
   echo "Removing duplicate identical sequences and merging corresponding *.reads.bam and *.reads.fq files"
-  if (($(ls clusters/*.IDs.txt | wc -l) < 1))
+  if (($(find clusters/ -name "*.IDs.txt" | wc -l) < 1))
   then echo "No duplicate sequences found"
-       else for j in $(ls clusters/*.IDs.txt | sed 's/.IDs.txt//' | sed 's/clusters\///')
+       else for j in $(find clusters/ -name "*.IDs.txt" | sed 's/.IDs.txt//' | sed 's/clusters\///')
             do while read line
                do echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | awk '{print "mv specimen_reads/"$1".reads.fq cons/"$1".reads.fq"}' > mv.sh
                   echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | awk '{print "rm specimen_reads/"$1".reads.bam"}' >> mv.sh
@@ -401,17 +401,19 @@ done
   fi
 #
   echo "Moving small clusters to the folder clusters_small"
+  rm -f ./mv.sh
   cd specimen_reads
-  seqkit stats *.fq -T | awk '$4 < 5' | awk '{print $1}' | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' > ../mv.sh
-  seqkit stats *.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/fas/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
-  seqkit stats *.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/reads.bam/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+  for i in $(find -name "*.fq" | grep -f ../bcSpecimens_all.txt -o | sort | uniq)
+  do seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+     seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/fas/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+     seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/reads.bam/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+  done
   cd ..
   chmod +x mv.sh
   ./mv.sh
-  rm -f ./mv.sh
 #
 echo "Polishing and variant calling"
-  for j in $(ls specimen_reads/*.fas | sed 's/.fas//' | sed 's/specimen_reads\///')
+  for j in $(find specimen_reads/ -name "*.fas" | sed 's/.fas//' | sed 's/specimen_reads\///')
   do echo "Consensus sequence polishing of $j"
      seqtk sample -s$(echo $RANDOM) specimen_reads/$j.reads.fq $READS_FOR_POLISHING | seqkit seq -n > IDs.txt # taking READS_FOR_POLISHING random reads for consensus polishing
      samtools view -N IDs.txt specimen_reads/$j.reads.bam -O BAM -o seq.bam
@@ -473,10 +475,10 @@ echo "Polishing and variant calling"
   echo "Collecting same amplicon single variant sequences into one file in the folder bcCons"
   cd specimen_reads
   find . -type f -name "*.fai" -delete
-  if (($(ls *.fas | grep -f ../gIDs.txt -o | wc -l) < 1))
+  if (($(find -name "*.fas" | grep -f ../gIDs.txt -o | wc -l) < 1))
   then echo "No single variant sequences"
   else 
-    for j in $(ls *.fas | sed 's/.vcluster.*$//' | sort | uniq)
+    for j in $(find -name "*.fas" | sed 's/.\///' | sed 's/.vcluster.*$//' | sort | uniq)
     do cat $j*.fas > ../bcCons/$j.new.fas
     done
   fi
@@ -484,10 +486,10 @@ echo "Polishing and variant calling"
 #
   echo "Removing primers from multi variant sequences, creating mapping files for each variant, and adding the variants to corresponding amplicon files in the folder bcCons"
   cd cons_withPrimers
-  if (($(ls *.fas | grep -f ../gIDs.txt -o | wc -l) < 1))
+  if (($(find -name "*.fas" | grep -f ../gIDs.txt -o | wc -l) < 1))
   then echo "No sequences with more than one variant"
   else 
-     for j in $(ls *.fas | sed 's/.vcluster.*$//' | sort | uniq)
+     for j in $(find -name "*.fas" | sed 's/.\///' | sed 's/.vcluster.*$//' | sort | uniq)
      do echo "Cutting primers"
      cat $j*.fas > withPrimers.fasta
      find . -type f -name "primersNotCut.fasta" -delete
@@ -509,14 +511,14 @@ echo "Polishing and variant calling"
      done
   fi
   cd ../bcCons
-  for i in $(ls *.new.fas | sed 's/.new.fas//')
+  for i in $(find -name "*.new.fas" | sed 's/.\///' | sed 's/.new.fas//')
   do echo "Removing duplicate consensus sequences of $i"
      seqkit rmdup -s -D $i.IDs.txt $i.new.fas > $i.deduplicated.fas
   done
 #
-  if (($(ls *.IDs.txt | wc -l) < 1))
+  if (($(find -name "*.IDs.txt" | wc -l) < 1))
   then echo "No duplicate sequences found"
-    else for i in $(ls *.IDs.txt | sed 's/.IDs.txt//')
+    else for i in $(find -name "*.IDs.txt" | sed 's/.\///' | sed 's/.IDs.txt//')
          do echo "Merging read files of identical consensus sequences of $i"
          while read line
            do echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | awk '{print "mv ../specimen_reads/"$1".reads.fq ../cons/"$1".reads.fq"}' > mv.sh
@@ -532,6 +534,8 @@ echo "Polishing and variant calling"
 #
   cd ..
   cd specimen_reads
-  seqkit stats *reads.fq -T | tail -n +2 | awk '{print $1, $4}' | sed 's/.reads.fq//' | sed 's/.vcluster/ vcluster/' | sort -k1,1 -k3,3nr | awk '{print $1"."$2, $0}' > ../bcCons/readCountID.txt
+  for i in $(find -name "*reads.fq" | grep -f ../bcSpecimens_all.txt -o | sort | uniq)
+  do seqkit stats $i.*reads.fq -T | tail -n +2 | awk '{print $1, $4}' | sed 's/.reads.fq//' | sed 's/.vcluster/ vcluster/' | sort -k1,1 -k3,3nr | awk '{print $1"."$2, $0}' >> ../bcCons/readCountID.txt
+  done
   cd ..
 #
