@@ -57,15 +57,14 @@ mamba create -n Minovar \
   devider==0.0.1 \
   python==3.12
 
-## Download dorado
+## Add Dorado to the conda environment
+conda activate Minovar
+mkdir -p "$CONDA_PREFIX/opt"
+cd "$CONDA_PREFIX/opt"
 wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.3.1-linux-x64.tar.gz
 tar -xzf dorado-1.3.1-linux-x64.tar.gz
-dorado-1.3.1-linux-x64/bin/dorado --version
 rm dorado-1.3.1-linux-x64.tar.gz
-
-## Test that dorado is working
-export DORADO_DIR="$PWD/dorado-1.3.1-linux-x64"
-export PATH="$DORADO_DIR/bin:$PATH"
+ln -sf "$CONDA_PREFIX/opt/dorado-1.3.1-linux-x64/bin/dorado" "$CONDA_PREFIX/bin/dorado"
 dorado --help
 
 ## Download dorado model
