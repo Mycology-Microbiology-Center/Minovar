@@ -33,9 +33,9 @@ SymF3v2_SymR3	600	900
 The first column contains primer name that matches the name in the fasta file. Second column is min and the third column max expected amplicon length. This is mainly to reduce noise in the output. Considering the indel errors in nanopore reads, it is worth setting the min length lower and max higher by 5-10%.
 
 
-Each fastq input file is processed separately to get initial consensus variant sequences for each amplicon. Cutadapt (>3.4) classifies reads to amplicons according to the primer sequences. Then there are two clustering steps with vsearch. First, the classified reads are sorted by average read quality in decreasing order and clustered by vsearch at 80% similarity (`vsearch --cluster_smallmem --usersort --id 0.8 --iddef`). Despite this low similarity, vsearch tends to separate much more similar variants (>95% similarity) into separate clusters (perhaps because it is not optimized for error profile of nanopore reads). The initial clustering similarity threshold is set low to avoid oversplitting and creating too many small clusters (many of which may belong to identical variants) that are not good enough to create initial consensus sequences. Minimum of 5 and maximum of 100 random reads (too high coverage is detrimental to consensus accuracy) of a cluster are used to create a consensus sequence with abpoa. The consensus sequences are clustered in the second vsearch step at 93% similarity (`vsearch --cluster_fast --id 0.93 --iddef`) and the initial clusters are accordingly merged. This is followed by new consensus sequence creation with abpoa. Identical consensus sequences are then detected with seqkit (seqkit rmdup -s -D) and the corresponding reads are merged into one file.
+Each fastq input file is processed separately to get initial consensus variant sequences for each amplicon. Cutadapt (>3.4) classifies reads to amplicons according to the primer sequences. Then there are two clustering steps with vsearch. First, the classified reads are sorted by average read quality in decreasing order and clustered by vsearch at 80% similarity (`vsearch --cluster_smallmem --usersort --id 0.8 --iddef`). Despite this low similarity, vsearch tends to separate much more similar variants (>95% similarity) into separate clusters (perhaps because it is not optimized for error profile of nanopore reads). The initial clustering similarity threshold is set low to avoid oversplitting and creating too many small clusters (many of which may belong to identical variants) that are not good enough to create initial consensus sequences. Minimum of 5 and maximum of 100 random reads (too high coverage is detrimental to consensus accuracy) of a cluster are used to create a consensus sequence with abpoa. The consensus sequences are clustered in the second vsearch step at 93% similarity (`vsearch --cluster_fast --id 0.93 --iddef`) and the initial clusters are accordingly merged. This is followed by new consensus sequence creation with abpoa. Identical consensus sequences are then detected with seqkit (`seqkit rmdup -s -D`) and the corresponding reads are merged into one file.
 
-The consensus sequences are polished with dorado polish, assuming the relevant polishing model has been downloaded to directory 'doradoModels'. The polished consensus sequences are then used for variant calling (minimap2 and freebayes). If high quality SNPs (score higher than 10) are detected, these will be used together with the read mapping file (`*.bam`) and the reference consensus sequence file to phase reads with devider. devider is able to detect even single SNP variants of very low frequency (default minimum is 0.25%) from high sequencing depth (>10000X) without the need to specify the expected number of variants. The limitation is that if there are indel-only variants (i.e. no substitutions), these will not be detected, but the indels will be taken into account in the following steps if in addition there is any substitution associated with the indel(s). The original reads corresponding to the detected variants are used to create consensus sequences separately for each variant and polished as before (abpoa and dorado polish).
+The consensus sequences are polished with dorado polish, assuming the relevant polishing model has been downloaded to directory 'doradoModels'. The polished consensus sequences are then used for variant calling (minimap2 and freebayes). If high quality SNPs (score higher than 10) are detected, these will be used together with the read mapping file (`*.bam`) and the reference consensus sequence file to phase reads with devider. devider is able to detect even single SNP variants of very low frequency (default minimum is 0.25%) from high sequencing depth (>10000X) without the need to specify the expected number of variants. The limitation is that if there are indel-only variants (i.e. no substitutions), these will not be detected, but the indels will be taken into account in the following steps if in addition there is any substitution associated with the indel(s). The original reads corresponding to the detected variants are used to create consensus sequences separately for each variant and polished as before (`abpoa` and `dorado polish`).
 
 
 The final polished consensus sequences are found in the bcCons folder and the corresponding reads in the specimen_reads folder.
@@ -44,9 +44,18 @@ The final polished consensus sequences are found in the bcCons folder and the co
 
 ```bash
 ## Create conda environment with required dependencies
-mamba create -n NANO \
+mamba create -n Minovar \
   -c conda-forge -c bioconda \
-  seqkit seqtk cutadapt vsearch samtools minimap2 freebayes abpoa devider
+  seqkit==2.12.0 \
+  seqtk==1.5 \
+  cutadapt==5.2 \
+  vsearch==2.30.4 \
+  samtools==1.23 \
+  minimap2==2.30 \
+  freebayes==1.3.10 \
+  abpoa==1.5.6 \
+  devider==0.0.1 \
+  python==3.12
 
 ## Download dorado
 wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.2.0-linux-x64.tar.gz
