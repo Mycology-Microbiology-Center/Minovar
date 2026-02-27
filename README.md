@@ -58,13 +58,13 @@ mamba create -n Minovar \
   python==3.12
 
 ## Download dorado
-wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.2.0-linux-x64.tar.gz
-tar -xzf dorado-1.2.0-linux-x64.tar.gz
-dorado-1.2.0-linux-x64/bin/dorado --version
-rm dorado-1.2.0-linux-x64.tar.gz
+wget https://cdn.oxfordnanoportal.com/software/analysis/dorado-1.3.1-linux-x64.tar.gz
+tar -xzf dorado-1.3.1-linux-x64.tar.gz
+dorado-1.3.1-linux-x64/bin/dorado --version
+rm dorado-1.3.1-linux-x64.tar.gz
 
 ## Test that dorado is working
-export DORADO_DIR="$PWD/dorado-1.2.0-linux-x64"
+export DORADO_DIR="$PWD/dorado-1.3.1-linux-x64"
 export PATH="$DORADO_DIR/bin:$PATH"
 dorado --help
 
