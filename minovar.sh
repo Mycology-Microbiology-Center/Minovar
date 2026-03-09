@@ -223,19 +223,6 @@ if [ ${#fastq_files[@]} -eq 0 ]; then
   echo -e "  \033[31mERROR: No .fastq.gz files found in $READS_DIR\033[0m" >&2
   exit 1
 fi
-echo -e "  \033[32mFound ${#fastq_files[@]} .fastq.gz file(s) in $READS_DIR\033[0m" >&2
-missing_bam=()
-for f in "${fastq_files[@]}"; do
-  base=$(basename "$f" .fastq.gz)
-  if [ ! -f "$READS_DIR/$base.bam" ]; then
-    missing_bam+=("$base.bam")
-  fi
-done
-if [ ${#missing_bam[@]} -gt 0 ]; then
-  echo -e "  \033[31mERROR: Each .fastq.gz must have a matching .bam in $READS_DIR. Missing:\033[0m" >&2
-  printf '    %s\n' "${missing_bam[@]}" >&2
-  exit 1
-fi
 shopt -u nullglob
 
 
@@ -284,7 +271,6 @@ mkdir -p cons
 
 seqkit seq -n $PRIMERS_FILE > gIDs.txt
 find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||" > bcSpecimens_all.txt
-
 for b in $(find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||")
 do echo "Filtering reads of $b according to minimum and maximum length specified in the file $BC_GENES_FILE and sorting by average read quality in descending order"
   seqkit seq --quiet -m $(awk 'min>$2 || NR==1{min=$2} END{print min}' $BC_GENES_FILE) -M $(awk 'max<$3 || NR==1{max=$3} END{print max}' $BC_GENES_FILE) $READS_DIR/$b.fastq.gz | 
@@ -352,8 +338,7 @@ if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
                       for v in $(cat temp.txt)
                       do cat $v | sort | uniq >> IDs.txt
                       done
-                      samtools view -N IDs.txt ../$READS_DIR/$b.bam -O BAM -o ../specimen_reads/$b.$j.reads.bam
-                      samtools fastq ../specimen_reads/$b.$j.reads.bam > ../specimen_reads/$b.$j.reads.fq
+                      seqkit grep -f IDs.txt ../reads/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
                       seqkit grep -f IDs.txt $k.fq > seq.fq
                       seqtk sample -s$(echo $RANDOM) seq.fq $MAX_READS_CONSENSUS > inputc.fas
                       abpoa inputc.fas > temp.fas
@@ -367,8 +352,7 @@ if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
                       for v in $(cat temp.txt)
                       do cat $v | sort | uniq >> IDs.txt
                       done
-                      samtools view -N IDs.txt ../$READS_DIR/$b.bam -O BAM -o ../specimen_reads/$b.$j.reads.bam
-                      samtools fastq ../specimen_reads/$b.$j.reads.bam > ../specimen_reads/$b.$j.reads.fq
+                      seqkit grep -f IDs.txt ../reads/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
                  fi
                  cat ../specimen_reads/$b.$k.*.fas | seqkit rmdup -s -D ../clusters/$b.$k.IDs.txt > ../clusters/$b.$k.classified.fas # removing duplicate identical sequences and getting IDs of duplicate sequences
                done
@@ -380,21 +364,19 @@ fi
 cd ..
 done
 #
-  echo "Removing duplicate identical sequences and merging corresponding *.reads.bam and *.reads.fq files"
+  echo "Removing duplicate identical sequences and merging corresponding *.reads.fq files"
+  find clusters/ -name "*.IDs.txt" -type 'f' -empty -delete
   if (($(find clusters/ -name "*.IDs.txt" | wc -l) < 1))
   then echo "No duplicate sequences found"
        else for j in $(find clusters/ -name "*.IDs.txt" | sed 's/.IDs.txt//' | sed 's/clusters\///')
             do while read line
                do echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | awk '{print "mv specimen_reads/"$1".reads.fq cons/"$1".reads.fq"}' > mv.sh
-                  echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | awk '{print "rm specimen_reads/"$1".reads.bam"}' >> mv.sh
                   echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | tail -n+2 | awk '{print "rm specimen_reads/"$1".fas"}' >> mv.sh
                   chmod +x mv.sh
                   ./mv.sh
                   toMerge=$(echo $line | sed 's/ /\t/' | cut -f2 | sed 's/, /\n/g' | head -n1)
                   cat cons/*.fq > specimen_reads/$toMerge.reads.fq
-                  seqkit seq -n specimen_reads/$toMerge.reads.fq > IDs.txt
-                  samtools view -N IDs.txt $READS_DIR/$(echo $j | grep -wo -f bcSpecimens_all.txt).bam -O BAM -o specimen_reads/$toMerge.reads.bam
-                  rm cons/*.fq
+                  find cons/ -name "*.fq" -delete
                   rm -f ./mv.sh
                done < clusters/$j.IDs.txt
             done
@@ -404,9 +386,8 @@ done
   rm -f ./mv.sh
   cd specimen_reads
   for i in $(find -name "*.fq" | grep -f ../bcSpecimens_all.txt -o | sort | uniq)
-  do seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
-     seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/fas/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
-     seqkit stats $i.*.fq -T | awk '$4 < 5' | awk '{print $1}' | sed s/reads.fq/reads.bam/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+  do seqkit stats $i.*.fq -T | awk '$4 < 10' | awk '{print $1}' | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
+     seqkit stats $i.*.fq -T | awk '$4 < 10' | awk '{print $1}' | sed s/reads.fq/fas/ | awk '{print "mv specimen_reads/"$1" clusters_small/"$1}' >> ../mv.sh
   done
   cd ..
   chmod +x mv.sh
@@ -415,13 +396,12 @@ done
 echo "Polishing and variant calling"
   for j in $(find specimen_reads/ -name "*.fas" | sed 's/.fas//' | sed 's/specimen_reads\///')
   do echo "Consensus sequence polishing of $j"
-     seqtk sample -s$(echo $RANDOM) specimen_reads/$j.reads.fq $READS_FOR_POLISHING | seqkit seq -n > IDs.txt # taking READS_FOR_POLISHING random reads for consensus polishing
-     samtools view -N IDs.txt specimen_reads/$j.reads.bam -O BAM -o seq.bam
+     seqtk sample -s$(echo $RANDOM) specimen_reads/$j.reads.fq $READS_FOR_POLISHING > seq.fq # taking READS_FOR_POLISHING random reads for consensus polishing
      find . -type f -name "*.bai" -delete
      find . -type f -name "*.fai" -delete
      cp specimen_reads/$j.fas cons.fa # dorado polish accepts only *.fasta or *.fa extensions, not *.fas
      samtools faidx cons.fa
-     dorado aligner cons.fa seq.bam | samtools sort > alignment.bam
+     dorado aligner cons.fa seq.fq | samtools sort > alignment.bam
      samtools index alignment.bam
      dorado polish alignment.bam cons.fa --ignore-read-groups --models-directory $DORADO_MODELS_DIR > consmed.fas # dorado polish alignment.bam cons.fa --ignore-read-groups > consmed.fas
      seqkit replace -p $(seqkit seq -n consmed.fas) -r $j consmed.fas > specimen_reads/$j.fas
@@ -429,7 +409,7 @@ echo "Polishing and variant calling"
      if (($(samtools view -c seq.bam) < 5))
      then echo "Fewer than 5 reads for $j"
      else rlen=$(seqkit stats -T specimen_reads/$j.fas | cut -f5 | tail -n+2 | awk -v filter="$READ_LENGTH_FILTER" '{print int($1*filter)}') # getting READ_LENGTH_FILTER of consensus sequence length to filter out too short reads after mapping
-         minimap2 -a --sam-hit-only -x map-ont --secondary=no -t $THREADS specimen_reads/$j.fas specimen_reads/$j.reads.fq | samtools sort | samtools view -e "rlen>=$rlen" -O BAM > alignment.bam # $rlen works only with double quotes in samtools view -e
+          minimap2 -a --sam-hit-only -x map-ont --secondary=no -t $THREADS specimen_reads/$j.fas specimen_reads/$j.reads.fq | samtools sort | samtools view -e "rlen>=$rlen" -O BAM > alignment.bam # $rlen works only with double quotes in samtools view -e
           samtools index alignment.bam
           samtools faidx specimen_reads/$j.fas
           freebayes -i --haplotype-length -1 -f specimen_reads/$j.fas alignment.bam > var.vcf # variant calling
@@ -437,11 +417,9 @@ echo "Polishing and variant calling"
           grep -v '#' var.vcf | awk -v threshold="$VARIANT_QUALITY_THRESHOLD" '$6>threshold' >> varf.vcf # adding only detected SNPs with high quality (score higher than VARIANT_QUALITY_THRESHOLD)
         if (($(grep -v '#' varf.vcf | wc -l) < 1)) # if no high quality SNPs were detected, do not process the consensus sequence further
         then echo "No SNPs for $j detected"
-             cp alignment.bam specimen_reads/$j.bam
-             samtools index specimen_reads/$j.bam
              else devider -b alignment.bam -v varf.vcf -r specimen_reads/$j.fas -o devider_output -t $THREADS --preset $DEVIDER_PRESET --min-cov $MIN_COVERAGE -O # keeping only variants supported by at least MIN_COVERAGE reads
              if [ ! -f devider_output/majority_vote_haplotypes.fasta ]
-             then echo "No variants with more than 4 reads detected"
+             then echo "No variants with $MIN_COVERAGE or more reads detected"
                   mv specimen_reads/$j.reads.fq mixed/
                   mv specimen_reads/$j.fas mixed/
              else seqkit seq -n devider_output/majority_vote_haplotypes.fasta | cut -d ',' -f3 > temp.txt # haplotype IDs
@@ -454,14 +432,13 @@ echo "Polishing and variant calling"
                   seqkit grep -f IDs.txt specimen_reads/$j.reads.fq > specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq # copying fastq reads of the variant to folder specimen_reads
                   seqkit grep -f IDs.txt for.fas > inputvar.fas
                   seqtk sample -s$(echo $RANDOM) inputvar.fas $MAX_READS_CONSENSUS > inputc.fas # MAX_READS_CONSENSUS random reads for consensus sequence computation
-                  abpoa inputc.fas > constemp.fas # computing consensus sequence or a variant
+                  abpoa inputc.fas > constemp.fas # computing consensus sequence of the variant
                   seqkit replace -p $(seqkit seq -n constemp.fas) -r $j.$(echo $v | sed 's/Haplotype://') constemp.fas > cons.fa # renaming consensus sequence of the variant # dorado polish accepts only *.fasta or *.fa extensions, not *.fas
-                  seqtk sample -s$(echo $RANDOM) specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq $READS_FOR_POLISHING | seqkit seq -n > IDs.txt
-                  samtools view -N IDs.txt specimen_reads/$j.reads.bam -O BAM -o seq.bam
+                  seqtk sample -s$(echo $RANDOM) specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq $READS_FOR_POLISHING > seq.fq
                   find . -type f -name "*.bai" -delete
                   find . -type f -name "*.fai" -delete
                   samtools faidx cons.fa
-                  dorado aligner cons.fa seq.bam | samtools sort > alignment.bam
+                  dorado aligner cons.fa seq.fq | samtools sort > alignment.bam
                   samtools index alignment.bam
                   dorado polish alignment.bam cons.fa --ignore-read-groups --models-directory $DORADO_MODELS_DIR > cons_withPrimers/$j.$(echo $v | sed 's/Haplotype://').fas
                done
@@ -516,6 +493,7 @@ echo "Polishing and variant calling"
      seqkit rmdup -s -D $i.IDs.txt $i.new.fas > $i.deduplicated.fas
   done
 #
+  find -name "*.IDs.txt" -type 'f' -empty -delete
   if (($(find -name "*.IDs.txt" | wc -l) < 1))
   then echo "No duplicate sequences found"
     else for i in $(find -name "*.IDs.txt" | sed 's/.\///' | sed 's/.IDs.txt//')
