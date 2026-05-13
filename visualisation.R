@@ -1899,7 +1899,7 @@ result.r3 <- data.frame()
 for (i in names(data)) {
   mod <- lmer(
     fungiotu.r ~ 
-      Design*Ecosystem + (1|Ecosystem:Plot),
+      Design*Ecosystem + (1|Plot),
     data = data[[i]]
   )
   a<-performance::performance(mod)
