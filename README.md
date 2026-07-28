@@ -6,6 +6,7 @@
 - [Minovar](#minovar)
 - [PRONAME](#proname)
 - [NextITS](#nextits)
+- [Citation](#citation)
 
 ## Raw sequencing data
 
@@ -363,4 +364,21 @@ nextflow run vmikk/NextITS -r main \
   --data_path "$DATA_PATH" \
   --outdir    "$OUTDIR_STEP2" \
   -work-dir   "$WORK_DIR_STEP2"
+```
+
+
+## Citation
+
+- Tedersoo L, Prous M, Chen M, Anslan S, Saar I, Dubois B, Mikryukov V. Benchmarking full-length ITS metabarcoding across Illumina 2x500, PacBio, and Oxford Nanopore sequencing using mock and soil communities // Molecular Ecology Resources (2026). DOI:10.1111/1755-0998.70189
+
+
+```bibtex
+@article{tedersoo2026benchmarking,
+  title = {Benchmarking full-length ITS metabarcoding across Illumina 2x500, PacBio, and Oxford Nanopore sequencing using mock and soil communities},
+  author = {Tedersoo, Leho and Prous, Marko and Chen, Meirong and Anslan, Sten and Saar, Irja and Dubois, Benjamin and Mikryukov, Vladimir},
+  journal = {Molecular Ecology Resources},
+  year = {2026},
+  publisher = {Wiley Online Library},
+  doi = {10.64898/2026.05.20.726443}
+}
 ```
