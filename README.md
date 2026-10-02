@@ -41,7 +41,7 @@ The final deduplicated polished consensus sequences are found in the bcCons fold
 
 ### Installation
 
-Since Minovar 1.2, seqtk is no required.
+Since Minovar 1.2, seqtk is not required.
 
 To install dependencies, you can use [conda](https://docs.anaconda.com/miniconda/) or [mamba](https://mamba.readthedocs.io/en/latest/):
 
@@ -83,15 +83,15 @@ dorado download --model $doradoModel --models-directory doradoModels
 1. Pull Minovar code to your local machine
 
 ```bash
-wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/minovar.sh
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/Minovar/refs/heads/main/minovar.sh
 chmod +x minovar.sh
 ```
 
 2. Prepare files with primer and amplicon length information.
 For examples, see:
 ```bash
-wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/bcGenes.txt
-wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/fullITS-multiplatform-eval/refs/heads/main/primers.fas
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/Minovar/refs/heads/main/bcGenes.txt
+wget https://raw.githubusercontent.com/Mycology-Microbiology-Center/Minovar/refs/heads/main/primers.fas
 ```
 
 3. Execute the workflow
@@ -136,6 +136,7 @@ conda activate Minovar
   --reads-for-polishing 200 \
   --variant-quality-threshold 10 \
   --min-coverage 5 \
+  --devider-min-abund 5 \
   --read-length-filter 0.9 \
   --reads-dir reads \
   --dorado-models-dir doradoModels
