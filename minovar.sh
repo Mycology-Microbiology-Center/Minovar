@@ -34,6 +34,7 @@ DORADO_MODELS_DIR="doradoModels"
 
 # Devider parameters
 DEVIDER_PRESET="nanopore-r10"
+MIN_ABUNDANCE=0.25
 
 
 ## --- Usage information
@@ -70,6 +71,7 @@ OPTIONS:
 
   Devider parameters:
     --devider-preset STRING           Devider preset (default: $DEVIDER_PRESET)
+    --devider-min-abund INT           Devider minimum abundance (in %) of a haplotype to be considered (default: $MIN_ABUNDANCE)
 
   Other:
     --threads INT                     Number of CPU threads for tools (default: $THREADS)
@@ -80,7 +82,7 @@ EXAMPLES:
   ./$(basename "$0")
 
   # Run with customized parameters
-  ./$(basename "$0") --cluster-id-first 0.85 --cluster-id-second 0.95 --min-coverage 10
+  ./$(basename "$0") --reads-dir reads --primers-file primers.fas --bc-genes-file bcGenes.txt --dorado-models-dir doradoModels --cluster-id-first 0.85 --cluster-id-second 0.95 --min-cluster-size 10 --min-coverage 10 --devider-min-abund 5
 
 EOF
     exit 1
@@ -156,6 +158,10 @@ while [[ $# -gt 0 ]]; do
             DEVIDER_PRESET="$2"
             shift 2
             ;;
+        --devider-min-abund)
+            MIN_ABUNDANCE="$2"
+            shift 2
+            ;;
         --threads)
             THREADS="$2"
             shift 2
@@ -188,7 +194,6 @@ check_availability() {
 check_availability "seqkit"
 check_availability "cutadapt"
 check_availability "vsearch"
-check_availability "seqtk"
 check_availability "samtools"
 check_availability "minimap2"
 check_availability "freebayes"
@@ -216,7 +221,7 @@ if [ ! -d "$READS_DIR" ]; then
   exit 1
 fi
 
-# Check for at least one *.fastq.gz file in $READS_DIR and that each has a matching .bam
+# Check for at least one *.fastq.gz file in $READS_DIR
 shopt -s nullglob
 fastq_files=("$READS_DIR"/*.fastq.gz)
 if [ ${#fastq_files[@]} -eq 0 ]; then
@@ -243,9 +248,11 @@ echo "  Sampling:"
 echo "    Max reads for consensus: $MAX_READS_CONSENSUS"
 echo "    Reads for polishing:     $READS_FOR_POLISHING"
 echo "  Variant calling:"
-echo "    Quality threshold:  $VARIANT_QUALITY_THRESHOLD"
-echo "    Min coverage:       $MIN_COVERAGE"
-echo "    Read length filter: $READ_LENGTH_FILTER"
+echo "    Quality threshold:     $VARIANT_QUALITY_THRESHOLD"
+echo "    Min coverage:          $MIN_COVERAGE"
+echo "    Devider preset:        $DEVIDER_PRESET"
+echo "    Devider min abundance: $MIN_ABUNDANCE"
+echo "    Read length filter:    $READ_LENGTH_FILTER"
 echo "  Paths:"
 echo "    Reads directory: $READS_DIR"
 echo "    Primers file:    $PRIMERS_FILE"
@@ -269,6 +276,15 @@ mkdir -p cons
 
 ## --- Main pipeline
 
+# Cleaning up folders from previous analysis
+find clusters/ -type f -delete
+find specimen_reads/ -type f -delete
+find bcCons/ -type f -delete
+find nonTargetAmp/ -type f -delete
+find mixed/ -type f -delete
+find clusters_small/ -type f -delete
+find cons_withPrimers/ -type f -delete
+#
 seqkit seq -n $PRIMERS_FILE > gIDs.txt
 find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||" > bcSpecimens_all.txt
 for b in $(find $READS_DIR/ -name "*.fastq.gz" | sed 's/.fastq.gz//' | sed "s|$READS_DIR/||")
@@ -304,13 +320,15 @@ if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
       else
         for j in $(find -name "vcluster*" | sed 's/.\///')
         do
-          if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least MIN_CLUSTER_SIZE reads for consensus sequence creation
+          if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least $MIN_CLUSTER_SIZE reads for consensus sequence creation
           then cat $j >> $k.fas
           else cp $j cluster.fas
-          seqtk sample -s$(echo $RANDOM) cluster.fas $MAX_READS_CONSENSUS > inputc.fas # creating consensus sequence based on maximum of MAX_READS_CONSENSUS random reads of the cluster
+          seqkit seq -n $j > $b.$k.$j.txt
+          seqkit replace -p "\s.+" ../$READS_DIR/$b.fastq.gz | seqkit grep -f $b.$k.$j.txt | 
+          seqkit fx2tab -q | sort -nrk4 | cut -f1 | head -n $MAX_READS_CONSENSUS > IDs.txt # getting IDs for the $MAX_READS_CONSENSUS highest quality reads
+          seqkit grep -f IDs.txt cluster.fas > inputc.fas # creating consensus sequence based on maximum of $MAX_READS_CONSENSUS highest quality reads of the cluster
           abpoa inputc.fas > temp.fas
           seqkit replace -p Consensus_sequence -r $b.$k.$j temp.fas >> $k.fas # collecting consensus sequences of the sample in the same file
-          seqkit seq -n $j > $b.$k.$j.txt
           fi
         done
         find . -type f -name "vcluster*" -delete
@@ -332,19 +350,20 @@ if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
              else
                for j in $(find -name "$k.vcluster*" | sed 's/.\///')
                do
-                 if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least MIN_CLUSTER_SIZE reads for consensus sequence creation
+                 if (($(grep -c ">" $j) < $MIN_CLUSTER_SIZE)) # selecting clusters with at least $MIN_CLUSTER_SIZE reads for consensus sequence creation
                  then seqkit grep -rvp vcluster $j | seqkit seq -n > IDs.txt
                       seqkit grep -rp vcluster $j | seqkit seq -n | sed s/$/.txt/ > temp.txt
                       for v in $(cat temp.txt)
                       do cat $v | sort | uniq >> IDs.txt
                       done
-                      seqkit grep -f IDs.txt ../reads/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
-                      seqkit grep -f IDs.txt $k.fq > seq.fq
-                      seqtk sample -s$(echo $RANDOM) seq.fq $MAX_READS_CONSENSUS > inputc.fas
+                      seqkit grep -f IDs.txt ../$READS_DIR/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
+                      seqkit replace -p "\s.+" ../specimen_reads/$b.$j.reads.fq | 
+                      seqkit fx2tab -q | sort -nrk4 | cut -f1 | head -n $MAX_READS_CONSENSUS > IDs.txt # getting IDs for the $MAX_READS_CONSENSUS highest quality reads
+                      seqkit grep -f IDs.txt $k.fq > inputc.fas
                       abpoa inputc.fas > temp.fas
                       seqkit replace -p Consensus_sequence -r $b.$j temp.fas > ../specimen_reads/$b.$j.fas
                  else
-                      seqtk sample -s$(echo $RANDOM) $j $MAX_READS_CONSENSUS > inputc.fas # creating consensus sequence based on maximum of MAX_READS_CONSENSUS random reads of the cluster
+                      seqkit sample $j -n $MAX_READS_CONSENSUS -2 > inputc.fas # creating consensus sequence based on maximum of $MAX_READS_CONSENSUS random consensus sequences and reads of the cluster
                       abpoa inputc.fas > temp.fas
                       seqkit replace -p Consensus_sequence -r $b.$j temp.fas > ../specimen_reads/$b.$j.fas
                       seqkit grep -rvp vcluster $j | seqkit seq -n > IDs.txt
@@ -352,7 +371,7 @@ if (($(find -name "*.fq" | grep -f ../gIDs.txt | wc -l) < 1))
                       for v in $(cat temp.txt)
                       do cat $v | sort | uniq >> IDs.txt
                       done
-                      seqkit grep -f IDs.txt ../reads/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
+                      seqkit grep -f IDs.txt ../$READS_DIR/$b.fastq.gz > ../specimen_reads/$b.$j.reads.fq
                  fi
                  cat ../specimen_reads/$b.$k.*.fas | seqkit rmdup -s -D ../clusters/$b.$k.IDs.txt > ../clusters/$b.$k.classified.fas # removing duplicate identical sequences and getting IDs of duplicate sequences
                done
@@ -396,7 +415,9 @@ done
 echo "Polishing and variant calling"
   for j in $(find specimen_reads/ -name "*.fas" | sed 's/.fas//' | sed 's/specimen_reads\///')
   do echo "Consensus sequence polishing of $j"
-     seqtk sample -s$(echo $RANDOM) specimen_reads/$j.reads.fq $READS_FOR_POLISHING > seq.fq # taking READS_FOR_POLISHING random reads for consensus polishing
+     seqkit replace -p "\s.+" specimen_reads/$j.reads.fq | 
+     seqkit fx2tab -q | sort -nrk4 | cut -f1 | head -n $READS_FOR_POLISHING > IDs.txt # getting IDs for the $READS_FOR_POLISHING highest quality reads
+     seqkit grep -f IDs.txt specimen_reads/$j.reads.fq > seq.fq # taking $READS_FOR_POLISHING highest quality reads for consensus polishing
      find . -type f -name "*.bai" -delete
      find . -type f -name "*.fai" -delete
      cp specimen_reads/$j.fas cons.fa # dorado polish accepts only *.fasta or *.fa extensions, not *.fas
@@ -406,9 +427,9 @@ echo "Polishing and variant calling"
      dorado polish alignment.bam cons.fa --ignore-read-groups --models-directory $DORADO_MODELS_DIR > consmed.fas # dorado polish alignment.bam cons.fa --ignore-read-groups > consmed.fas
      seqkit replace -p $(seqkit seq -n consmed.fas) -r $j consmed.fas > specimen_reads/$j.fas
      echo "Variant calling and consensus sequence creation and polishing of $j"
-     if (($(samtools view -c seq.bam) < 5))
+     if (($(seqkit stats -T seq.fq | cut -f4 | tail -n+2) < 5))
      then echo "Fewer than 5 reads for $j"
-     else rlen=$(seqkit stats -T specimen_reads/$j.fas | cut -f5 | tail -n+2 | awk -v filter="$READ_LENGTH_FILTER" '{print int($1*filter)}') # getting READ_LENGTH_FILTER of consensus sequence length to filter out too short reads after mapping
+     else rlen=$(seqkit stats -T specimen_reads/$j.fas | cut -f5 | tail -n+2 | awk -v filter="$READ_LENGTH_FILTER" '{print int($1*filter)}') # getting $READ_LENGTH_FILTER of consensus sequence length to filter out too short reads after mapping
           minimap2 -a --sam-hit-only -x map-ont --secondary=no -t $THREADS specimen_reads/$j.fas specimen_reads/$j.reads.fq | samtools sort | samtools view -e "rlen>=$rlen" -O BAM > alignment.bam # $rlen works only with double quotes in samtools view -e
           samtools index alignment.bam
           samtools faidx specimen_reads/$j.fas
@@ -417,7 +438,7 @@ echo "Polishing and variant calling"
           grep -v '#' var.vcf | awk -v threshold="$VARIANT_QUALITY_THRESHOLD" '$6>threshold' >> varf.vcf # adding only detected SNPs with high quality (score higher than VARIANT_QUALITY_THRESHOLD)
         if (($(grep -v '#' varf.vcf | wc -l) < 1)) # if no high quality SNPs were detected, do not process the consensus sequence further
         then echo "No SNPs for $j detected"
-             else devider -b alignment.bam -v varf.vcf -r specimen_reads/$j.fas -o devider_output -t $THREADS --preset $DEVIDER_PRESET --min-cov $MIN_COVERAGE -O # keeping only variants supported by at least MIN_COVERAGE reads
+             else devider -b alignment.bam -v varf.vcf -r specimen_reads/$j.fas -o devider_output -t $THREADS --preset $DEVIDER_PRESET --min-cov $MIN_COVERAGE --min-abund $MIN_ABUNDANCE -O # keeping only variants supported by at least $MIN_COVERAGE reads
              if [ ! -f devider_output/majority_vote_haplotypes.fasta ]
              then echo "No variants with $MIN_COVERAGE or more reads detected"
                   mv specimen_reads/$j.reads.fq mixed/
@@ -425,16 +446,19 @@ echo "Polishing and variant calling"
              else seqkit seq -n devider_output/majority_vote_haplotypes.fasta | cut -d ',' -f3 > temp.txt # haplotype IDs
                   samtools view -f 16 alignment.bam | cut -f1 | sort | uniq > rev.txt # reverse complemented read IDs
                   samtools view alignment.bam | awk '$2 == 0' | cut -f1 | sort | uniq > for.txt  # forward read IDs
-                  seqkit grep -f for.txt specimen_reads/$j.reads.fq | seqkit fq2fa > for.fas
-                  seqkit grep -f rev.txt specimen_reads/$j.reads.fq | seqkit seq -p -r -v -t DNA | seqkit fq2fa >> for.fas # all reads in the same orientation
+                  seqkit grep -f for.txt specimen_reads/$j.reads.fq | seqkit replace -p "\s.+" | seqkit fq2fa > for.fas
+                  seqkit grep -f rev.txt specimen_reads/$j.reads.fq | seqkit replace -p "\s.+" | seqkit seq -p -r -v -t DNA | seqkit fq2fa >> for.fas # all reads in the same orientation
                for v in $(cat temp.txt)
                do grep $v devider_output/ids.txt | cut -f 4- | sed 's/\t/\n/g' > IDs.txt
                   seqkit grep -f IDs.txt specimen_reads/$j.reads.fq > specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq # copying fastq reads of the variant to folder specimen_reads
-                  seqkit grep -f IDs.txt for.fas > inputvar.fas
-                  seqtk sample -s$(echo $RANDOM) inputvar.fas $MAX_READS_CONSENSUS > inputc.fas # MAX_READS_CONSENSUS random reads for consensus sequence computation
+                  seqkit replace -p "\s.+" specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq | 
+                  seqkit fx2tab -q | sort -nrk4 | cut -f1 | head -n $MAX_READS_CONSENSUS > IDs.txt
+                  seqkit grep -f IDs.txt for.fas > inputc.fas # MAX_READS_CONSENSUS highest quality reads for consensus sequence computation
                   abpoa inputc.fas > constemp.fas # computing consensus sequence of the variant
                   seqkit replace -p $(seqkit seq -n constemp.fas) -r $j.$(echo $v | sed 's/Haplotype://') constemp.fas > cons.fa # renaming consensus sequence of the variant # dorado polish accepts only *.fasta or *.fa extensions, not *.fas
-                  seqtk sample -s$(echo $RANDOM) specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq $READS_FOR_POLISHING > seq.fq
+                  seqkit replace -p "\s.+" specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq | 
+                  seqkit fx2tab -q | sort -nrk4 | cut -f1 | head -n $READS_FOR_POLISHING > IDs.txt
+                  seqkit grep -f IDs.txt specimen_reads/$j.$(echo $v | sed 's/Haplotype://').reads.fq > seq.fq
                   find . -type f -name "*.bai" -delete
                   find . -type f -name "*.fai" -delete
                   samtools faidx cons.fa
@@ -517,3 +541,14 @@ echo "Polishing and variant calling"
   done
   cd ..
 #
+echo "Combining sample fasta files into one fasta file per amplicon"
+echo "and creating also fasta file per amplicon with read count (rc) included in the sequence headers"
+  cd bcCons
+  awk '{print $2".rc"$4"."$3}' readCountID.txt | sed 's/vcluster/v/' > temp.txt
+  paste -d ' ' temp.txt readCountID.txt > readCountID1.txt
+  awk '{print $2"\t"$1}' readCountID1.txt > rename.txt
+  for k in $(ls *.fas | grep -o -f ../gIDs.txt | sort | uniq)
+  do cat *.$k.deduplicated.fas > $k.fas
+     seqkit replace -p '(.+)' -r '{kv}' -k rename.txt $k.fas --keep-key | seqkit sort -N -r > $k.readCount.fas
+  done
+  cd ..
